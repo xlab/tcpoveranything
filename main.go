@@ -1,15 +1,15 @@
 package main
 
 import (
-	"net"
-	"fmt"
-	"log"
 	"bufio"
-	"strconv"
-	"io"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
+	"io"
+	"log"
 	mrand "math/rand"
+	"net"
+	"strconv"
 
 	"code.google.com/p/tuntap"
 )
@@ -76,9 +76,9 @@ func handleConnection(conn net.Conn) {
 		bindChange <- &binding{bind.local, bind.virtual, nil}
 	}()
 
-	const maxPktLen = 20*1024
+	const maxPktLen = 20 * 1024
 	var pktlen uint32
-	var pkt [unMungeStart+maxPktLen]byte
+	var pkt [unMungeStart + maxPktLen]byte
 	for {
 		if err = binary.Read(r, binary.BigEndian, &pktlen); err != nil {
 			log.Println("Error reading from remote socket:", err)
@@ -102,7 +102,7 @@ func handleConnection(conn net.Conn) {
 
 type binding struct {
 	local, virtual *net.TCPAddr
-	remote net.Conn
+	remote         net.Conn
 }
 
 func (b *binding) String() string {

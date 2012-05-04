@@ -25,7 +25,7 @@ func (o *onesComplement) Sub(b []byte) {
 }
 
 func (o *onesComplement) Sum() uint16 {
-	for o.sum >> 16 != 0 {
+	for o.sum>>16 != 0 {
 		o.sum = (o.sum & 0xffff) + (o.sum >> 16)
 	}
 	return ^uint16(o.sum)

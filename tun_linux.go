@@ -1,8 +1,8 @@
 package main
 
 import (
-	"os/exec"
 	"net"
+	"os/exec"
 
 	"code.google.com/p/tuntap"
 )

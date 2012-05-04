@@ -1,9 +1,10 @@
 package main
 
 import (
-	"net"
-	"code.google.com/p/tuntap"
 	"encoding/binary"
+	"net"
+
+	"code.google.com/p/tuntap"
 )
 
 // Extract and return the dst TCPAddr from the packet, as well as the
@@ -24,21 +25,21 @@ func mungePacket(p *tuntap.Packet) (*net.TCPAddr, []byte, uint16) {
 			return nil, nil, 0
 		}
 		next = int(p.Packet[nextOff])
-		nextOff = int(p.Packet[nextOff+1])*8+8
+		nextOff = int(p.Packet[nextOff+1])*8 + 8
 	}
 	// nextOff points to the start of the TCP header
-	if len(p.Packet) - nextOff < 20 {
+	if len(p.Packet)-nextOff < 20 {
 		// Not enough room for a TCP header
 		return nil, nil, 0
 	}
 
-	destPort := int(binary.BigEndian.Uint16(p.Packet[nextOff+2:nextOff+4]))
+	destPort := int(binary.BigEndian.Uint16(p.Packet[nextOff+2 : nextOff+4]))
 
 	// Compute the adjusted checksum (with the stuff we'll munge
 	// substracted)
-	sum := &onesComplement{uint64(^binary.BigEndian.Uint16(p.Packet[nextOff+16:nextOff+18]))}
+	sum := &onesComplement{uint64(^binary.BigEndian.Uint16(p.Packet[nextOff+16 : nextOff+18]))}
 	sum.Sub(p.Packet[8:40])
-	sum.Sub(p.Packet[nextOff:nextOff+4])
+	sum.Sub(p.Packet[nextOff : nextOff+4])
 
 	return &net.TCPAddr{destIp, destPort}, p.Packet[nextOff+4:], sum.Sum()
 }
@@ -46,11 +47,12 @@ func mungePacket(p *tuntap.Packet) (*net.TCPAddr, []byte, uint16) {
 var ipv6Header = []byte{
 	0x60, 0, 0, 0, // Version, Traffic Class, Flow Label
 	0, 0, // Payload length
-	0, // Next protocol
-	1, // Hop limit (makes sure we stay on localhost)
+	0,                                              // Next protocol
+	1,                                              // Hop limit (makes sure we stay on localhost)
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // src
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // dst
 }
+
 const unMungeStart = 44
 
 // Assumes that the packet is at b[unMungeStart:]
