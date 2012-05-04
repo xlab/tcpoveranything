@@ -1,0 +1,23 @@
+The protocol starts as 3 \n-terminated lines, followed by
+prefix-delimited payloads. Client connects to the relay at
+localhost:1943. Relay starts ('R: ' and 'C: ' denote who is speaking,
+they're not part of the wire bytes).
+
+R: fd12:3456:7890:abcd::1  [the local IP the client should bind to]
+C: 32845 [Port on the above IP that the client has bound]
+R: [fd12:3456:7890:abcd:1234:5678:90ab:cdef]:4242 [IP:port to send/receive from]
+
+After the first message from the relay, you should bind to a port on
+the interface it specifies, and tell it which port you got. Then, if
+you're a client, connect to the ip:port the relay gave you. If you're
+a server, expect an inbound connection from the specified ip:port.
+
+Once this binding negociation has finished, the socket becomes a
+binary pipe of payloads. Both directions use the same framing: a
+16-bit big-endian integer number of bytes, followed by that number of
+bytes in payload.
+
+The payloads are supposed to be opaque (i.e. you should just shovel
+them to the mirror instance of tcpoveranything), but in practice,
+they're a TCP segment with no IP header and the first 4 bytes of the
+TCP header missing. The checksum is probably wrong too.
