@@ -14,16 +14,17 @@ func panicif(err error) {
 	}
 }
 
+var ch = make(chan interface{})
+
 func server() {
-	ln, err := net.Listen("tcp", ":5656")
+	ln, err := net.Listen("tcp", ":33333")
 	panicif(err)
 
-	for {
-		sock, err := ln.Accept()
-		panicif(err)
-		sock.Write([]byte("Hi there!\n"))
-		sock.Close()
-	}
+	sock, err := ln.Accept()
+	panicif(err)
+	sock.Write([]byte("Hi there!\n"))
+	sock.Close()
+	ch<-nil
 }
 
 func client(lport int, dest string) {
@@ -37,6 +38,8 @@ func client(lport int, dest string) {
 	b, err := ioutil.ReadAll(sock)
 	panicif(err)
 	fmt.Println("Client:", string(b))
+	sock.Close()
+	ch<-nil
 }
 
 func register(port int) (string, io.Reader, io.Writer)  {
@@ -55,9 +58,11 @@ func register(port int) (string, io.Reader, io.Writer)  {
 
 func main() {
 	go server()
-	_, ar, aw := register(5656)
-	addr, br, bw := register(5657)
+	_, ar, aw := register(33333)
+	addr, br, bw := register(22222)
 	go io.Copy(bw, ar)
 	go io.Copy(aw, br)
-	client(5657, addr)
+	go client(22222, addr)
+	<-ch
+	<-ch
 }
