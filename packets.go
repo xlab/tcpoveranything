@@ -73,7 +73,7 @@ func init() {
 		58, // Next Protocol
 		1, // Hop limit
 	})
-	copy(icmp[40:], []byte{1, 3}) // Address Unreachable +
+	copy(icmp[40:], []byte{1, 3}) // Address Unreachable
 }
 
 // Not thread-safe. Which is fine for us, only the tuntap reader
