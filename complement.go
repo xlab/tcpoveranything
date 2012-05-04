@@ -16,11 +16,11 @@ func (o *onesComplement) Add(b []byte) {
 
 func (o *onesComplement) Sub(b []byte) {
 	for len(b) > 1 {
-		o.sum += ^(uint64(b[0])<<8 + uint64(b[1]))
+		o.sum += uint64(^b[0])<<8 + uint64(^b[1])
 		b = b[2:]
 	}
 	if len(b) > 0 {
-		o.sum += ^uint64(b[0])
+		o.sum += uint64(^b[0])
 	}
 }
 
