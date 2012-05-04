@@ -2,7 +2,6 @@ package main
 
 import (
 	"net"
-	"log"
 	"code.google.com/p/tuntap"
 	"encoding/binary"
 )
@@ -79,7 +78,7 @@ func unMungePacket(b []byte, bind *binding) *tuntap.Packet {
 }
 
 var icmpGoAway = []byte{
-	1, 1, // Communication administratively prohibited
+	1, 3, // Address unreachable
 	0, 0, // Checksum
 	0, 0, 0, 0, // Reserved
 }
