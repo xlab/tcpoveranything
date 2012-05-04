@@ -17,7 +17,6 @@ import (
 
 var port = flag.Uint("port", 1943, "Port for binding requests")
 
-
 func init() {
 	var b [8]byte
 	if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
@@ -97,7 +96,7 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		Unstrip(pkt[:strippedPacketOffset+pktlen], bind.local, bind.virtual)
-		if err = tunDev.WritePacket(&tuntap.Packet{Protocol:0x86dd, Packet: pkt[:strippedPacketOffset+pktlen]}); err != nil {
+		if err = tunDev.WritePacket(&tuntap.Packet{Protocol: 0x86dd, Packet: pkt[:strippedPacketOffset+pktlen]}); err != nil {
 			log.Println("Failed to write packet:", err)
 			return
 		}
@@ -189,7 +188,7 @@ func pump() {
 					b.remote.Close()
 				}
 			} else {
-				tunDev.WritePacket(&tuntap.Packet{Protocol:0x86dd, Packet: icmpError(tunAddr.IP, pkt.Packet)})
+				tunDev.WritePacket(&tuntap.Packet{Protocol: 0x86dd, Packet: icmpError(tunAddr.IP, pkt.Packet)})
 				// TODO: log error if any
 			}
 		case b := <-bindChange:

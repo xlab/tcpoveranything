@@ -10,7 +10,7 @@ const strippedPacketOffset = 44
 
 type packet struct {
 	Full []byte
-	Tcp []byte
+	Tcp  []byte
 	Dest net.TCPAddr
 }
 
@@ -26,7 +26,7 @@ func (p *packet) Reset(pkt []byte) error {
 			return errors.New("Overran packet looking for TCP header")
 		}
 		next = int(p.Full[nextOff])
-		nextOff = int(p.Full[nextOff+1])*8+8
+		nextOff = int(p.Full[nextOff+1])*8 + 8
 	}
 	p.Tcp = p.Full[nextOff:]
 	if len(p.Tcp) < 20 {
@@ -71,7 +71,7 @@ func init() {
 		0x60, 0, 0, 0, // Version, Traffic Class, Flow Label
 		0, 0, // Payload Length
 		58, // Next Protocol
-		1, // Hop limit
+		1,  // Hop limit
 	})
 	copy(icmp[40:], []byte{1, 3}) // Address Unreachable
 }
