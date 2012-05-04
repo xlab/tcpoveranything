@@ -38,10 +38,8 @@ func mungePacket(p *tuntap.Packet) (*net.TCPAddr, []byte, uint16) {
 	// Compute the adjusted checksum (with the stuff we'll munge
 	// substracted)
 	sum := &onesComplement{uint64(^binary.BigEndian.Uint16(p.Packet[nextOff+16:nextOff+18]))}
-	log.Printf("old sum: %04x\n", sum.Sum())
 	sum.Sub(p.Packet[8:40])
 	sum.Sub(p.Packet[nextOff:nextOff+4])
-	log.Printf("adj sum: %04x\n", sum.Sum())
 
 	return &net.TCPAddr{destIp, destPort}, p.Packet[nextOff+4:], sum.Sum()
 }
@@ -74,10 +72,7 @@ func unMungePacket(b []byte, bind *binding) *tuntap.Packet {
 
 	// Readjust the TCP checksum for the new data
 	sum := &onesComplement{uint64(^binary.BigEndian.Uint16(b[56:58]))}
-	log.Printf("adj sum: %04x\n", sum.Sum())
 	sum.Add(b[8:44])
-	log.Printf("new sum: %04x\n", sum.Sum())
-	log.Printf("new sum: %04x\n", sum.Sum())
 	binary.BigEndian.PutUint16(b[56:58], sum.Sum())
 
 	return &tuntap.Packet{Protocol: 0x86dd, Packet: b}
