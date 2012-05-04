@@ -74,10 +74,6 @@ func init() {
 		1, // Hop limit
 	})
 	copy(icmp[40:], []byte{1, 3}) // Address Unreachable +
-	// checksum Fixed parts of the ICMP payload. We'll then have to
-	// addChecksum the IP addresses, payload length and original
-	// packet.
-	binary.BigEndian.PutUint16(icmp[42:44], ^oneAdd(icmp[5:7], icmp[40:42]))
 }
 
 // Not thread-safe. Which is fine for us, only the tuntap reader
