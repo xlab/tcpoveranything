@@ -8,16 +8,26 @@ C: 32845 [Port on the above IP that the client has bound]
 R: [fd12:3456:7890:abcd:1234:5678:90ab:cdef]:4242 [IP:port to send/receive from]
 
 After the first message from the relay, you should bind to a port on
-the interface it specifies, and tell it which port you got. Then, if
-you're a client, connect to the ip:port the relay gave you. If you're
-a server, expect an inbound connection from the specified ip:port.
+the interface it specifies, and tell it which port you got. You can
+also bind on 0.0.0.0 if you fancy, I don't care.
+
+Then, if you're a client, connect to the ip:port the relay gave
+you. If you're a server, expect an inbound connection from the
+specified ip:port.
 
 Once this binding negociation has finished, the socket becomes a
 binary pipe of payloads. Both directions use the same framing: a
-16-bit big-endian integer number of bytes, followed by that number of
-bytes in payload.
+32-bit big-endian unsigned integer number of bytes, followed by that
+number of bytes in payload.
 
 The payloads are supposed to be opaque (i.e. you should just shovel
-them to the mirror instance of tcpoveranything), but in practice,
-they're a TCP segment with no IP header and the first 4 bytes of the
-TCP header missing. The checksum is probably wrong too.
+them to the mirror instance of tcpoveranything). However, if you're
+interested, each packet is a partial TCP segment. It's missing the
+enclosing IPv6 header, and the first 4 bytes of the TCP header
+(src/dest ports).
+
+The TCP checksum has also been adjusted to remove the contribution of
+both the IP/ports of the original packet, so that the tcpoveranything
+server on the other end can readd the IP/ports appropriate for its end
+of the connection and readjust the checksum without lots of
+recomputation.

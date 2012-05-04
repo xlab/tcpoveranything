@@ -1,0 +1,11 @@
+The biggie is modifying the packet protocol so that the userspace
+client can feed back PMTU information to tcpoveranything. Combined
+with setting the tun interface MTU really high (say, 20k),
+tcpoveranything can send the appropriate ICMPv6 chatter to make the
+kernel adjust the size of its TCP segments.
+
+Right now, we just simplify and cap the MTU at the IPv6 minimum (1280
+bytes). That produces packets that are at most 1236 bytes. While in
+theory ipv4 can have lower MTUs, in practice, anything below 1400
+bytes is unusual, which leaves quite a bit of headroom for your own
+encapsulation.
