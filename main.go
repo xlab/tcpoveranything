@@ -23,8 +23,6 @@ func init() {
 }
 
 func main() {
-	fmt.Println("Welcome to your worst nightmare")
-
 	if err := startDevPump(); err != nil {
 		log.Fatalln("Couldn't set up virtual interface:", err)
 	}
@@ -34,7 +32,8 @@ func main() {
 		log.Fatalln("Couldn't listen on localhost:1943:", err)
 	}
 
-	fmt.Println("Serving IPs from", tunAddr)
+	log.Println("Serving IPs from", tunAddr)
+	log.Println("Listening on port 1943")
 	go pump()
 
 	for {
@@ -51,10 +50,11 @@ func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	r := bufio.NewReader(conn)
 
-	fmt.Fprintf(conn, "%s\n", tunAddr.IP.String())
+	fmt.Fprintln(conn, tunAddr.IP.String())
 
 	resp, prefix, err := r.ReadLine()
 	if err != nil && prefix {
+		log.Println("Error getting port number:", err)
 		return
 	}
 	localPort, err := strconv.ParseUint(string(resp), 10, 32)
@@ -69,7 +69,7 @@ func handleConnection(conn net.Conn) {
 	}
 
 	log.Println("Adding binding", bind)
-	fmt.Fprintf(conn, "%s\n", bind.virtual.String())
+	fmt.Fprintln(conn, bind.virtual.String())
 
 	bindChange <- bind
 	defer func() {
@@ -92,7 +92,6 @@ func handleConnection(conn net.Conn) {
 			log.Println("Short read:", err)
 			return
 		}
-		log.Println("Packet for tun!", pkt[:unMungeStart+pktlen])
 		if err = tunDev.WritePacket(unMungePacket(pkt[:unMungeStart+pktlen], bind)); err != nil {
 			log.Println("Failed to write packet:", err)
 			return
@@ -185,7 +184,6 @@ func pump() {
 					// TODO: log error if any
 				}
 			}
-			// TODO: Decode and forward
 		case b := <-bindChange:
 			if b.remote == nil {
 				log.Println("Removing binding", b)
@@ -196,4 +194,3 @@ func pump() {
 		}
 	}
 }
-
