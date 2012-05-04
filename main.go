@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,9 @@ import (
 
 	"code.google.com/p/tuntap"
 )
+
+var port = flag.Uint("port", 1943, "Port for binding requests")
+
 
 func init() {
 	var b [8]byte
@@ -27,13 +31,13 @@ func main() {
 		log.Fatalln("Couldn't set up virtual interface:", err)
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:1943")
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
 	if err != nil {
 		log.Fatalln("Couldn't listen on localhost:1943:", err)
 	}
 
 	log.Println("Serving IPs from", tunAddr)
-	log.Println("Listening on port 1943")
+	log.Println("Listening on port", *port)
 	go pump()
 
 	for {
