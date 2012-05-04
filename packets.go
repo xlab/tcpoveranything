@@ -2,111 +2,91 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
-
-	"code.google.com/p/tuntap"
 )
 
-// Extract and return the dst TCPAddr from the packet, as well as the
-// slimmed down TCP payload to forward and the adjusted checksum
-// (which you need to add back at pkt[12:14]. Returns nils if decoding
-// screws up.
-func mungePacket(p *tuntap.Packet) (*net.TCPAddr, []byte, uint16) {
-	if p.Protocol != 0x86dd {
-		return nil, nil, 0
-	}
+const strippedPacketOffset = 44
 
-	destIp := net.IP(p.Packet[24:40])
+type packet struct {
+	Full []byte
+	Tcp []byte
+	Dest net.TCPAddr
+}
 
-	next := int(p.Packet[6])
+// Dissect the given full IPv6 packet.
+func (p *packet) Reset(pkt []byte) error {
+	p.Full = pkt
+
+	// Locate the TCP packet
+	next := int(p.Full[6])
 	nextOff := 40
 	for next != 6 {
-		if nextOff+1 >= len(p.Packet) {
-			return nil, nil, 0
+		if nextOff+1 >= len(p.Full) {
+			return errors.New("Overran packet looking for TCP header")
 		}
-		next = int(p.Packet[nextOff])
-		nextOff = int(p.Packet[nextOff+1])*8 + 8
+		next = int(p.Full[nextOff])
+		nextOff = int(p.Full[nextOff+1])*8+8
 	}
-	// nextOff points to the start of the TCP header
-	if len(p.Packet)-nextOff < 20 {
-		// Not enough room for a TCP header
-		return nil, nil, 0
+	p.Tcp = p.Full[nextOff:]
+	if len(p.Tcp) < 20 {
+		return errors.New("Not enough room for a TCP header")
 	}
+	p.Dest.IP = p.Full[24:40]
+	p.Dest.Port = int(binary.BigEndian.Uint16(p.Tcp[2:4]))
 
-	destPort := int(binary.BigEndian.Uint16(p.Packet[nextOff+2 : nextOff+4]))
-
-	// Compute the adjusted checksum (with the stuff we'll munge
-	// substracted)
-	sum := &onesComplement{uint64(^binary.BigEndian.Uint16(p.Packet[nextOff+16 : nextOff+18]))}
-	sum.Sub(p.Packet[8:40])
-	sum.Sub(p.Packet[nextOff : nextOff+4])
-
-	return &net.TCPAddr{destIp, destPort}, p.Packet[nextOff+4:], sum.Sum()
+	return nil
 }
 
-var ipv6Header = []byte{
-	0x60, 0, 0, 0, // Version, Traffic Class, Flow Label
-	0, 0, // Payload length
-	0,                                              // Next protocol
-	1,                                              // Hop limit (makes sure we stay on localhost)
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // src
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // dst
+// Munges the buffer given by Reset() and returns the stripped
+// payload.
+func (p *packet) Strip() []byte {
+	subChecksum(p.Tcp[16:18], oneAdd(p.Full[8:40], p.Tcp[:4]))
+	return p.Tcp[4:]
 }
 
-const unMungeStart = 44
-
-// Assumes that the packet is at b[unMungeStart:]
-func unMungePacket(b []byte, bind *binding) *tuntap.Packet {
-	copy(b, ipv6Header)
-	// Payload length
-	binary.BigEndian.PutUint16(b[4:6], uint16(len(b)-len(ipv6Header)))
-	// Next protocol
-	b[6] = 6
-	// Source IP
-	copy(b[8:24], bind.virtual.IP)
-	// Destination IP
-	copy(b[24:40], bind.local.IP)
-	// Source TCP port
-	binary.BigEndian.PutUint16(b[40:42], uint16(bind.virtual.Port))
-	// Destination TCP port
-	binary.BigEndian.PutUint16(b[42:44], uint16(bind.local.Port))
-
-	// Readjust the TCP checksum for the new data
-	sum := &onesComplement{uint64(^binary.BigEndian.Uint16(b[56:58]))}
-	sum.Add(b[8:44])
-	binary.BigEndian.PutUint16(b[56:58], sum.Sum())
-
-	return &tuntap.Packet{Protocol: 0x86dd, Packet: b}
+// Reassemble the given stripped packet. Expects the stripped packet
+// to be written at pkt[strippedPacketOffset:] so that it has room to
+// put the rest of the headers back.
+func Unstrip(pkt []byte, local, virtual *net.TCPAddr) {
+	copy(pkt, []byte{
+		0x60, 0, 0, 0, // Version, Traffic Class, Flow Label
+		0, 0, // Payload length
+		6, // Next protocol
+		1, // Hop limit
+	})
+	binary.BigEndian.PutUint16(pkt[4:6], uint16(len(pkt)-40))
+	copy(pkt[8:24], virtual.IP)
+	copy(pkt[24:40], local.IP)
+	binary.BigEndian.PutUint16(pkt[40:42], uint16(virtual.Port))
+	binary.BigEndian.PutUint16(pkt[42:44], uint16(local.Port))
+	addChecksum(pkt[56:58], oneAdd(pkt[8:40], pkt[40:44]))
 }
 
-var icmpGoAway = []byte{
-	1, 3, // Address unreachable
-	0, 0, // Checksum
-	0, 0, 0, 0, // Reserved
+var icmp = make([]byte, 1280)
+var icmpTypPseudo = []byte{0, 58}
+
+func init() {
+	copy(icmp, []byte{
+		0x60, 0, 0, 0, // Version, Traffic Class, Flow Label
+		0, 0, // Payload Length
+		58, // Next Protocol
+		1, // Hop limit
+	})
+	copy(icmp[40:], []byte{1, 3}) // Address Unreachable +
+	// checksum Fixed parts of the ICMP payload. We'll then have to
+	// addChecksum the IP addresses, payload length and original
+	// packet.
+	binary.BigEndian.PutUint16(icmp[42:44], ^oneAdd(icmp[5:7], icmp[40:42]))
 }
 
-func icmpError(src net.IP, orig []byte) *tuntap.Packet {
-	b := make([]byte, 1280)
-	copy(b, ipv6Header)
-	copy(b[len(ipv6Header):], icmpGoAway)
-	// Original payload
-	n := copy(b[len(ipv6Header)+len(icmpGoAway):], orig)
-	b = b[:len(ipv6Header)+len(icmpGoAway)+n]
-	// Payload length
-	binary.BigEndian.PutUint16(b[4:6], uint16(len(b)-len(ipv6Header)))
-	// Next protocol
-	b[6] = 58
-	// Source IP
-	copy(b[8:24], src)
-	copy(b[24:40], src)
-
-	// ICMPv6 checksum.
-	checksum := &onesComplement{}
-	checksum.Add(b[8:40])
-	checksum.Add(b[4:6])
-	checksum.Add(b[6:7])
-	checksum.Add(b[40:])
-	binary.BigEndian.PutUint16(b[42:44], checksum.Sum())
-
-	return &tuntap.Packet{Protocol: 0x86dd, Packet: b}
+// Not thread-safe. Which is fine for us, only the tuntap reader
+// thread returns ICMP errors.
+func icmpError(src net.IP, pkt []byte) []byte {
+	n := copy(icmp[56:], pkt)
+	binary.BigEndian.PutUint16(icmp[4:6], uint16(n+16))
+	copy(icmp[8:24], src)
+	copy(icmp[24:40], src)
+	binary.BigEndian.PutUint16(icmp[42:44], ^oneAdd(icmp[4:6], icmp[8:40], icmpTypPseudo, icmp[40:42], icmp[56:]))
+	return icmp[:n+56]
 }

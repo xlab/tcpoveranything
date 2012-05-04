@@ -82,7 +82,7 @@ func handleConnection(conn net.Conn) {
 
 	const maxPktLen = 20 * 1024
 	var pktlen uint32
-	var pkt [unMungeStart + maxPktLen]byte
+	var pkt [strippedPacketOffset + maxPktLen]byte
 	for {
 		if err = binary.Read(r, binary.BigEndian, &pktlen); err != nil {
 			log.Println("Error reading from remote socket:", err)
@@ -92,15 +92,15 @@ func handleConnection(conn net.Conn) {
 			log.Println("Remote wants me to read a too big packet, bailing")
 			return
 		}
-		if _, err := io.ReadFull(r, pkt[unMungeStart:unMungeStart+pktlen]); err != nil {
+		if _, err := io.ReadFull(r, pkt[strippedPacketOffset:strippedPacketOffset+pktlen]); err != nil {
 			log.Println("Short read:", err)
 			return
 		}
-		if err = tunDev.WritePacket(unMungePacket(pkt[:unMungeStart+pktlen], bind)); err != nil {
+		Unstrip(pkt[:strippedPacketOffset+pktlen], bind.local, bind.virtual)
+		if err = tunDev.WritePacket(&tuntap.Packet{Protocol:0x86dd, Packet: pkt[:strippedPacketOffset+pktlen]}); err != nil {
 			log.Println("Failed to write packet:", err)
 			return
 		}
-		// TODO: decode, munge, forward to tunDev
 	}
 }
 
@@ -168,25 +168,29 @@ func pump() {
 	}()
 
 	m := make(map[string]*binding)
+	p := &packet{}
 
 	for {
 		select {
 		case pkt := <-pkts:
-			dst, payload, new_sum := mungePacket(pkt)
-			if dst != nil {
-				b, ok := m[dst.String()]
-				if ok {
-					binary.BigEndian.PutUint16(payload[12:14], new_sum)
-					binary.Write(b.remote, binary.BigEndian, uint32(len(payload)))
-					if n, err := b.remote.Write(payload); err != nil || n != len(payload) {
-						log.Println("Short write")
-						// Triggers teardown in the reader
-						b.remote.Close()
-					}
-				} else {
-					tunDev.WritePacket(icmpError(tunAddr.IP, pkt.Packet))
-					// TODO: log error if any
+			if pkt.Protocol != 0x86dd {
+				continue
+			}
+			if err := p.Reset(pkt.Packet); err != nil {
+				continue
+			}
+			b, ok := m[p.Dest.String()]
+			if ok {
+				stripped := p.Strip()
+				binary.Write(b.remote, binary.BigEndian, uint32(len(stripped)))
+				if n, err := b.remote.Write(stripped); err != nil || n != len(stripped) {
+					log.Println("Short write")
+					// Triggers teardown in the reader
+					b.remote.Close()
 				}
+			} else {
+				tunDev.WritePacket(&tuntap.Packet{Protocol:0x86dd, Packet: icmpError(tunAddr.IP, pkt.Packet)})
+				// TODO: log error if any
 			}
 		case b := <-bindChange:
 			if b.remote == nil {
