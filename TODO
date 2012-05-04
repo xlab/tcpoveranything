@@ -9,3 +9,15 @@ bytes). That produces packets that are at most 1236 bytes. While in
 theory ipv4 can have lower MTUs, in practice, anything below 1400
 bytes is unusual, which leaves quite a bit of headroom for your own
 encapsulation.
+
+
+Figure out how extensive support is for TCP Simultaneous Open. If
+linux/bsd/OSX/Win7 understand it, implement a client that just does a
+simultaneous open, rather than futz around with a server socket.
+
+
+Connection shutdown isn't clean. For most clients, the userspace
+packet socket gets torn down before the outer TCP connection has time
+to terminate cleanly. It doesn't actually matter, since the kernel
+will eventually give up and clean up, but it's ugly. It would be nice
+to at least send an RST to wrap things up faster.
