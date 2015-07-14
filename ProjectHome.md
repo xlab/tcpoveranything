@@ -1,0 +1,1 @@
+A horrible/awesome hack to let you tunnel TCP over any transport your little heart desires. Not for the faint hearted.
